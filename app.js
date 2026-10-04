@@ -45,9 +45,9 @@ function init(D) {
 
   // 3. Map with real streets underneath
   map = L.map('map', { zoomControl: false }).fitBounds(bounds);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd', maxZoom: 20
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
   }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
   new ResizeObserver(() => map.invalidateSize()).observe($('map')); // keep the map sized as panels open and close
