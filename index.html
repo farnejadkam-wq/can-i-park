@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Can I park here? Camden</title>
+<meta name="theme-color" content="#1D4E9E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Can I park?">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F5F7; --panel:#FFFFFF; --ink:#16202B; --muted:#5B6672; --line:#DCE1E6; --sign:#1D4E9E;
+  --yes:#2FB36D; --pay:#F2C230; --no:#E5484D; --check:#8E99A4;
+  --font:"Overpass","Helvetica Neue",Arial,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root{ --paper:#14181C; --panel:#1B2025; --ink:#E9EDF1; --muted:#9AA5B1; --line:#2C333A; --sign:#3A6FC8; } }
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%}
+body{height:100%;margin:0;background:var(--panel);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.4;-webkit-font-smoothing:antialiased}
+.app{height:100%;display:flex;flex-direction:column;min-height:0}
+.side{display:contents}
+header{display:flex;align-items:center;gap:12px;padding:10px 14px 8px;background:var(--panel)}
+.mark{flex:none;width:34px;height:34px;border-radius:6px;background:var(--sign);color:#fff;display:grid;place-items:center;font-weight:800;font-size:24px;line-height:1;padding-top:3px;border:2px solid var(--panel);outline:2px solid var(--sign)}
+.titles{flex:1;min-width:0}
+h1{margin:0;font-size:20px;font-weight:800;line-height:1.1}
+.where{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#setBtn{flex:none;font:700 14px var(--font);padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;padding:2px 14px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.controls[hidden]{display:none}
+.field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.field>span{font-size:12px;color:var(--muted);font-weight:600}
+select,input[type=time],input[type=search]{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:5px 8px;min-width:0;width:100%}
+.when,.search{grid-column:1/-1}
+.timepair{display:flex;gap:6px;align-items:center}
+.timepair select{flex:1}
+.timepair input[type=time]{flex:0 0 118px}
+.badge{flex:none;display:flex;align-items:center;gap:6px;font-size:15px;margin-left:auto;padding-left:4px}
+.badge input{width:20px;height:20px;accent-color:var(--sign)}
+:focus-visible{outline:3px solid var(--sign);outline-offset:2px}
+.mapwrap{order:2;position:relative;flex:1;min-height:220px}
+#map{position:absolute;inset:0;background:#E8E6E1}
+.legend{position:absolute;z-index:500;left:10px;top:10px;max-width:calc(100% - 70px);display:flex;flex-wrap:wrap;gap:4px 12px;background:rgba(255,255,255,.92);color:#16202B;border-radius:8px;padding:5px 10px;font-size:12.5px;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:5px;vertical-align:middle}
+#loc{position:absolute;z-index:500;right:10px;bottom:28px;width:44px;height:44px;border-radius:8px;border:0;background:#fff;color:#1D4E9E;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer}
+#loc svg{width:22px;height:22px;vertical-align:middle}
+.toast{position:absolute;z-index:600;left:50%;bottom:28px;transform:translateX(-50%);background:#16202B;color:#fff;padding:8px 12px;border-radius:8px;font-size:14px;max-width:90%;display:none}
+.panel{order:3;flex:0 0 auto;max-height:38%;overflow:auto;background:var(--panel);border-top:1px solid var(--line)}
+.panel h2{font-size:15px;font-weight:800;margin:0;padding:12px 14px 6px}
+.list{list-style:none;margin:0;padding:0 0 4px}
+.list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:6px 1fr auto;gap:10px;align-items:center;width:100%;padding:9px 14px;cursor:pointer}
+.list button:hover{background:var(--paper)}
+.list button:focus-visible{outline:3px solid var(--sign);outline-offset:-3px}
+.bar{width:6px;height:34px;border-radius:3px}
+.l1{font-weight:700;font-size:15px}
+.l2{color:var(--muted);font-size:13px}
+.dist{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.empty{padding:4px 14px 12px;color:var(--muted);font-size:14px}
+.verdict{padding:14px 14px 12px;color:#16202B}
+.verdict.no{color:#fff}
+.verdict .h{font-size:24px;font-weight:800;line-height:1.15}
+.verdict .sub{font-size:15px;margin-top:4px}
+.facts{margin:0;padding:8px 14px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;overflow-wrap:anywhere}
+.actions{display:flex;gap:8px;padding:6px 14px 12px}
+.actions a,.actions button{font:700 14px var(--font);padding:9px 12px;border-radius:8px;text-decoration:none;cursor:pointer;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.actions a.primary{background:var(--sign);color:#fff;border-color:var(--sign)}
+.foot{font-size:12px;color:var(--muted);padding:8px 14px 14px;border-top:1px solid var(--line)}
+.leaflet-container{font-family:var(--font)}
+@media (min-width:900px){
+  .app{display:grid;grid-template-columns:380px 1fr;grid-template-rows:100%}
+  .side{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--panel)}
+  .mapwrap{grid-column:2;grid-row:1}
+  .panel{flex:1;max-height:none}
+  #setBtn{display:none}
+  .controls[hidden]{display:grid}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="side">
+    <header>
+      <div class="mark" aria-hidden="true">P</div>
+      <div class="titles"><h1>Can I park here?</h1><div class="where" id="summary">Camden on-street bays</div></div>
+      <button id="setBtn" aria-controls="controls" aria-expanded="false">Settings</button>
+    </header>
+    <div class="controls" id="controls">
+      <label class="field"><span>Your permit</span><select id="zone"></select></label>
+      <label class="field"><span>Vehicle</span>
+        <select id="veh"><option value="car">Petrol or diesel car</option><option value="ev">Electric car</option><option value="moto">Motorbike</option></select></label>
+      <div class="field when"><span id="whenl">When</span>
+        <div class="timepair"><select id="day" aria-labelledby="whenl"><option value="now">Right now</option></select><input type="time" id="tm" value="18:00" aria-label="Time" hidden><label class="badge"><input type="checkbox" id="badge"> Blue Badge</label></div></div>
+      <label class="field search"><span>Find a street or postcode</span><input type="search" id="q" list="roads" placeholder="e.g. Fitzroy Street or NW1 8" autocomplete="off"></label>
+      <datalist id="roads"></datalist>
+    </div>
+    <section class="panel" id="panel" aria-live="polite"><p class="empty">Loading Camden's parking bays…</p></section>
+  </div>
+  <div class="mapwrap">
+    <div id="map" aria-label="Map of Camden parking bays, coloured by whether you can park"></div>
+    <div class="legend" aria-hidden="true">
+      <span><i style="background:var(--yes)"></i>You can park</span>
+      <span><i style="background:var(--pay)"></i>Pay</span>
+      <span><i style="background:var(--no)"></i>Can't park</span>
+      <span><i style="background:var(--check)"></i>Check sign</span>
+    </div>
+    <button id="loc" title="Go to my location" aria-label="Go to my location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <div class="toast" id="toast" role="status"></div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="rules.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
