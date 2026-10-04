@@ -1,6 +1,6 @@
 // Service worker: lets the app open instantly and work with a weak signal.
 // Bump VERSION whenever you change any file, so phones pick up the new version.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const FILES = ['./', 'index.html', 'app.js', 'rules.js', 'data.json', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
