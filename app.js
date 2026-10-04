@@ -16,26 +16,36 @@ const store = {
 
 let map, bays = [], C, sel = null, me = null, meLayers = null, pin = null, hl = null, firstFix = true, bounds;
 
-fetch('data.json').then(r => r.json()).then(init).catch(() => {
+// One file per borough. To add a borough: build its data-*.json with tools/ and add it here.
+const FILES = ['data-camden.json?v=3', 'data-islington.json?v=3'];
+const LINES = new Set(['single yellow line', 'double yellow line', 'zig zag', 'red route']);
+let SOURCES = [];
+Promise.all(FILES.map(f => fetch(f).then(r => r.json()))).then(init).catch(() => {
   $('panel').innerHTML = '<p class="empty">Couldn\'t load the parking data. Check your connection and reload.</p>';
 });
 
-function init(D) {
-  // 1. Turn the raw rows into bay objects
-  bays = D.bays.map((r, i) => {
+function init(files) {
+  // 1. Turn each borough's rows into bay objects
+  SOURCES = files.map(D => `${D.source}, ${D.updated}`);
+  files.forEach(D => D.bays.forEach(r => {
     const ll = r[10].map(a => { const o = []; for (let k = 0; k < a.length; k += 2) o.push([a[k + 1], a[k]]); if (o.length === 1) o.push([o[0][0] + 0.00001, o[0][1]]); return o; });
     const f = ll[0], mid = f[Math.floor((f.length - 1) / 2)];
     const [cx, cy] = P(mid[1], mid[0]);
-    return { i, type: D.types[r[0]], comps: comps(D.types[r[0]]), timesRaw: D.times[r[1]], wins: parseTimes(D.times[r[1]]),
-      stay: D.stays[r[2]], tariff: D.tariffs[r[3]], road: D.roads[r[4]], pc: r[5], zone: D.zones[r[6]],
-      permits: parsePermits(D.permits[r[7]]), spaces: r[8], cash: r[9], ll, lat: mid[0], lng: mid[1], cx, cy, st: 'no' };
-  });
+    const vocab = D.vocab[r[0]], m = D.match[r[11]] || '';
+    let wins = parseTimes(D.times[r[1]]); if (!wins.length) wins = parseTimes('at any time');
+    bays.push({ i: bays.length, borough: D.borough, type: D.types[r[0]], comps: comps(vocab), line: LINES.has(vocab),
+      timesRaw: D.times[r[1]] || 'at any time', wins, stay: D.stays[r[2]], tariff: D.tariffs[r[3]], road: D.roads[r[4]], pc: r[5],
+      zone: D.zones[r[6]], permits: parsePermits(D.permits[r[7]]), spaces: r[8], cash: r[9], noret: D.noret[r[12]] || '',
+      matchRaw: /^(suspended|coach)/i.test(m) ? '' : m, mwins: m && !/^(suspended|coach)/i.test(m) ? parseTimes(m) : null,
+      matchNote: /^suspended/i.test(m) ? 'Suspended on match days' : /^coach/i.test(m) ? 'Coach parking only on match days' : '',
+      ll, lat: mid[0], lng: mid[1], cx, cy, st: 'no' });
+  }));
   bounds = L.latLngBounds(bays.map(b => [b.lat, b.lng]));
-  window.__updated = D.updated;
 
   // 2. Controls
-  const zones = [...new Set(bays.flatMap(b => [...b.permits, b.zone]).filter(z => /^CA-[A-Z]$/.test(z)))].sort();
-  $('zone').innerHTML = '<option value="">No Camden permit</option>' + zones.map(z => `<option value="${z}">Zone ${z}</option>`).join('');
+  const zones = [...new Set(bays.flatMap(b => [...b.permits, b.zone]).filter(z => /^(CA|IS)-[A-Z]{1,2}$/.test(z)))].sort();
+  const grp = (p, name) => `<optgroup label="${name}">` + zones.filter(z => z.startsWith(p)).map(z => `<option value="${z}">${name} zone ${z.slice(3)}</option>`).join('') + '</optgroup>';
+  $('zone').innerHTML = '<option value="">No permit</option>' + grp('CA-', 'Camden') + grp('IS-', 'Islington');
   $('day').innerHTML += ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d, i) => `<option value="${i}">${d}</option>`).join('');
   $('roads').innerHTML = [...new Set(bays.map(b => b.road))].sort().map(r => `<option value="${r.replace(/"/g, '&quot;')}">`).join('');
   const saved = store.get('zone') !== null;
@@ -45,7 +55,7 @@ function init(D) {
 
   // 3. Map with real streets underneath
   map = L.map('map', { zoomControl: false }).fitBounds(bounds);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19
   }).addTo(map);
@@ -68,6 +78,7 @@ function init(D) {
   $('zone').onchange = () => { store.set('zone', $('zone').value); recompute(); };
   $('veh').onchange = () => { store.set('veh', $('veh').value); recompute(); };
   $('badge').onchange = () => { store.set('badge', $('badge').checked ? '1' : '0'); recompute(); };
+  $('match').onchange = recompute;
   $('day').onchange = () => { $('tm').hidden = $('day').value === 'now'; recompute(); };
   $('tm').onchange = recompute;
   $('setBtn').onclick = () => setSettingsOpen($('controls').hidden);
@@ -92,7 +103,7 @@ function ctx() {
   let d, m;
   if ($('day').value === 'now') ({ d, m } = londonNow());
   else { d = +$('day').value; const [h, mi] = ($('tm').value || '18:00').split(':'); m = +h * 60 + +mi; }
-  return { d, m, zone: $('zone').value || null, veh: $('veh').value, badge: $('badge').checked };
+  return { d, m, zone: $('zone').value || null, veh: $('veh').value, badge: $('badge').checked, match: $('match').checked };
 }
 function recompute() {
   C = ctx();
@@ -107,10 +118,10 @@ function restyle() {
   if (sel) highlight(sel);
 }
 function summary() {
-  const z = $('zone').value ? `Zone ${$('zone').value}` : 'No permit';
+  const z = $('zone').value ? $('zone').selectedOptions[0].textContent : 'No permit';
   const v = { car: 'petrol or diesel', ev: 'electric', moto: 'motorbike' }[$('veh').value];
   const t = $('day').value === 'now' ? 'right now' : `${DAYN[+$('day').value]} ${$('tm').value}`;
-  $('summary').textContent = `${z}, ${v}${$('badge').checked ? ', Blue Badge' : ''}, ${t}`;
+  $('summary').textContent = `${z}, ${v}${$('badge').checked ? ', Blue Badge' : ''}, ${t}${$('match').checked ? ', match day' : ''}`;
 }
 
 // --- Location ----------------------------------------------------------
@@ -125,7 +136,7 @@ function locate() {
     else { meLayers[0].setLatLng([lat, lng]).setRadius(acc); meLayers[1].setLatLng([lat, lng]); }
     if (firstFix) {
       firstFix = false;
-      if (!bounds.pad(0.2).contains([lat, lng])) toast('You\'re outside Camden. This only covers Camden bays for now.');
+      if (!bounds.pad(0.2).contains([lat, lng])) toast('You\'re outside the area covered. This only covers Camden and Islington for now.');
       else map.setView([lat, lng], 17);
     }
     if (pin) { map.removeLayer(pin); pin = null; }
@@ -170,17 +181,20 @@ function refPoint() {
 }
 function renderPanel() {
   const p = $('panel');
-  const foot = `<div class="foot">Camden Council open data, updated ${esc(window.__updated)}. Doesn't include yellow lines, suspensions, bank holidays or temporary signs. The sign on the street always wins.</div>`;
+  const foot = `<div class="foot">Data: ${SOURCES.map(esc).join('; ')}. Yellow lines are Islington only. Doesn't include suspensions, bank holidays or temporary signs. The sign on the street always wins.</div>`;
   if (sel) {
     const v = verdict(sel, C), b = sel;
     const tariff = b.tariff ? b.tariff.split(/ \/ (?=(?:EV|\d+):)/).map(esc).join('<br>') : '';
     p.innerHTML = `<div class="verdict ${v.s}" style="background:${COL[v.s]}"><div class="h">${esc(v.h)}</div><div class="sub">${esc(v.sub)}</div></div>
       <dl class="facts"><dt>Street</dt><dd>${esc(b.road)}${b.pc ? ', ' + esc(b.pc) : ''}</dd>
-      <dt>Bay</dt><dd>${esc(b.type[0].toUpperCase() + b.type.slice(1))}${b.spaces ? `, ${b.spaces} space${b.spaces > 1 ? 's' : ''}` : ''}</dd>
+      <dt>Type</dt><dd>${esc(b.type[0].toUpperCase() + b.type.slice(1))}${b.spaces ? `, ${b.spaces} space${b.spaces > 1 ? 's' : ''}` : ''}</dd>
       <dt>Hours</dt><dd>${esc(cap(b.timesRaw))}</dd>
+      ${b.matchRaw ? `<dt>Match days</dt><dd>${esc(cap(b.matchRaw))}</dd>` : ''}
       ${b.zone ? `<dt>Zone</dt><dd>${esc(b.zone)}</dd>` : ''}
       ${b.permits.length ? `<dt>Permits</dt><dd>${esc([...new Set(b.permits)].join(', '))}</dd>` : ''}
       ${b.stay ? `<dt>Max stay</dt><dd>${esc(b.stay)}</dd>` : ''}
+      ${b.noret ? `<dt>No return</dt><dd>${esc(b.noret)}</dd>` : ''}
+      <dt>Council</dt><dd>${esc(b.borough)}</dd>
       ${tariff ? `<dt>Tariff</dt><dd>${tariff}</dd>` : ''}
       ${b.cash ? `<dt>Pay by phone code</dt><dd>${esc(b.cash)}</dd>` : ''}</dl>
       <div class="actions"><a class="primary" href="https://www.google.com/maps/dir/?api=1&destination=${b.lat.toFixed(6)},${b.lng.toFixed(6)}" target="_blank" rel="noopener">Get directions</a><button id="back">Back to list</button></div>${foot}`;
@@ -190,10 +204,10 @@ function renderPanel() {
   const r = refPoint();
   const near = bays.filter(b => b.st === 'yes' || b.st === 'pay').map(b => ({ b, d: Math.hypot(b.cx - r.x, b.cy - r.y) })).sort((a, b) => a.d - b.d);
   const seen = new Set(), rows = [];
-  for (const n of near) { const v = verdict(n.b, C); const k = n.b.road + v.h; if (seen.has(k)) continue; seen.add(k); rows.push({ ...n, v }); if (rows.length >= 10) break; }
+  for (const n of near) { const v = verdict(n.b, C); const k = n.b.road + n.b.type + v.h; if (seen.has(k)) continue; seen.add(k); rows.push({ ...n, v }); if (rows.length >= 10) break; }
   const whenTxt = $('day').value === 'now' ? 'now' : 'at that time';
   p.innerHTML = `<h2>Where you can park ${whenTxt}, nearest ${r.label}</h2>` +
-    (rows.length ? `<ul class="list">${rows.map(n => `<li><button data-i="${n.b.i}"><span class="bar" style="background:${COL[n.v.s]}"></span><span><span class="l1">${esc(n.b.road)}</span><br><span class="l2">${esc(n.v.h)}. ${esc(n.v.sub)}</span></span><span class="dist">${distTxt(n.d)}</span></button></li>`).join('')}</ul>`
+    (rows.length ? `<ul class="list">${rows.map(n => `<li><button data-i="${n.b.i}"><span class="bar" style="background:${COL[n.v.s]}"></span><span><span class="l1">${esc(n.b.road)}</span><br><span class="l2">${n.b.line ? esc(n.b.type) + '. ' : ''}${esc(n.v.h)}. ${esc(n.v.sub)}</span></span><span class="dist">${distTxt(n.d)}</span></button></li>`).join('')}</ul>`
       : `<p class="empty">No bays you can use ${whenTxt}. Try another time or permit.</p>`) + foot;
   p.querySelectorAll('.list button').forEach(el => el.onclick = () => {
     const b = bays[+el.dataset.i]; if (me) me.follow = false;

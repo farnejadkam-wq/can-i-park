@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Can I park here? Camden</title>
+<title>Can I park here?</title>
 <meta name="theme-color" content="#1D4E9E">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -44,7 +44,7 @@ select,input[type=time],input[type=search]{font:inherit;font-size:16px;color:var
 .timepair select{flex:1}
 .timepair input[type=time]{flex:0 0 118px}
 .badge{flex:none;display:flex;align-items:center;gap:6px;font-size:15px;margin-left:auto;padding-left:4px}
-.badge input{width:20px;height:20px;accent-color:var(--sign)}
+.matchrow{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:15px}.matchrow input,.badge input{width:20px;height:20px;accent-color:var(--sign)}
 :focus-visible{outline:3px solid var(--sign);outline-offset:2px}
 .mapwrap{order:2;position:relative;flex:1;min-height:220px}
 #map{position:absolute;inset:0;background:#E8E6E1}
@@ -91,7 +91,7 @@ select,input[type=time],input[type=search]{font:inherit;font-size:16px;color:var
   <div class="side">
     <header>
       <div class="mark" aria-hidden="true">P</div>
-      <div class="titles"><h1>Can I park here?</h1><div class="where" id="summary">Camden on-street bays</div></div>
+      <div class="titles"><h1>Can I park here?</h1><div class="where" id="summary">Camden and Islington</div></div>
       <button id="setBtn" aria-controls="controls" aria-expanded="false">Settings</button>
     </header>
     <div class="controls" id="controls">
@@ -100,13 +100,14 @@ select,input[type=time],input[type=search]{font:inherit;font-size:16px;color:var
         <select id="veh"><option value="car">Petrol or diesel car</option><option value="ev">Electric car</option><option value="moto">Motorbike</option></select></label>
       <div class="field when"><span id="whenl">When</span>
         <div class="timepair"><select id="day" aria-labelledby="whenl"><option value="now">Right now</option></select><input type="time" id="tm" value="18:00" aria-label="Time" hidden><label class="badge"><input type="checkbox" id="badge"> Blue Badge</label></div></div>
+      <label class="matchrow"><input type="checkbox" id="match"> Arsenal home match day (Islington rules)</label>
       <label class="field search"><span>Find a street or postcode</span><input type="search" id="q" list="roads" placeholder="e.g. Fitzroy Street or NW1 8" autocomplete="off"></label>
       <datalist id="roads"></datalist>
     </div>
     <section class="panel" id="panel" aria-live="polite"><p class="empty">Loading Camden's parking bays…</p></section>
   </div>
   <div class="mapwrap">
-    <div id="map" aria-label="Map of Camden parking bays, coloured by whether you can park"></div>
+    <div id="map" aria-label="Map of Camden and Islington parking bays, coloured by whether you can park"></div>
     <div class="legend" aria-hidden="true">
       <span><i style="background:var(--yes)"></i>You can park</span>
       <span><i style="background:var(--pay)"></i>Pay</span>
@@ -118,7 +119,7 @@ select,input[type=time],input[type=search]{font:inherit;font-size:16px;color:var
   </div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="rules.js"></script>
-<script src="app.js?v=2"></script>
+<script src="rules.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
